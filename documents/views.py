@@ -29,9 +29,9 @@ class DocumentViewSet(viewsets.ModelViewSet):
         document_content = ""
         for page in pdf_reader.pages:
             document_content += page.extract_text() or ""
-
+        print("Extracted Content:", document_content)
         # Summarize the content using HuggingFace pipeline
-        summarized_content = summarizer(document_content, max_length=100, min_length=50, do_sample=False)
+        summarized_content = summarizer(document_content, max_length=10000, min_length=5, do_sample=False)
         summary_text = summarized_content[0]['summary_text']
 
         # Classify the summarized content
@@ -42,7 +42,8 @@ class DocumentViewSet(viewsets.ModelViewSet):
         serializer.save(
             uploaded_by=self.request.user,
             content=summary_text,
-            type=document_type
+            type=document_type,
+            
         )
 
     def get_queryset(self):
@@ -52,6 +53,13 @@ class DocumentViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(uploaded_by=user)
         return queryset
 
+
+
+class WorkflowViewSet(viewsets.ModelViewSet):
+    queryset = Workflow.objects.all()
+    serializer_class = WorkflowSerializer
+    permission_classes = [IsAuthenticated]
+   
 
     @action(detail=True, methods=['post'], url_path='assign-workflow')
     def assign_to_workflow(self, request, pk=None):
@@ -66,9 +74,3 @@ class DocumentViewSet(viewsets.ModelViewSet):
             return Response({'message': f'Document {document.title} assigned to workflow {workflow.name}.'})
         except Workflow.DoesNotExist:
             return Response({'error': 'Workflow not found.'}, status=404)
-
-
-class WorkflowViewSet(viewsets.ModelViewSet):
-    queryset = Workflow.objects.all()
-    serializer_class = WorkflowSerializer
-    permission_classes = [IsAuthenticated]

@@ -35,7 +35,7 @@ class Document(models.Model):
     type = models.CharField(max_length=50, choices=DOCUMENT_TYPES)
     status = models.CharField(max_length=50, choices=STATUS_CHOICES)
     uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE)
-    workflows = models.ManyToManyField('Workflow', related_name='documents')
+    workflows = models.ManyToManyField('Workflow', null=True, blank=True, related_name='documents')
 
     file = models.FileField(upload_to='documents/', null=True, blank=True) 
     created_at = models.DateTimeField(auto_now_add=True)
