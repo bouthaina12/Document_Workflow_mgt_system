@@ -3,13 +3,17 @@ from django.shortcuts import render, redirect
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.http import HttpResponseForbidden
+from django.contrib.auth.models import Group, User
 
 # Register view
 def register(request):
     if request.method == 'POST':
         form = UserCreationForm(request.POST)
         if form.is_valid():
-            form.save()
+            user = form.save()
+             # Add the user to the 'Employees' group by default
+            employees_group = Group.objects.get(name='Employees')
+            user.groups.add(employees_group)
             return redirect('login')
     else:
         form = UserCreationForm()
@@ -25,6 +29,10 @@ def login_view(request):
             # Redirect based on role
             if user.groups.filter(name='Administrators').exists():
                 return redirect('admin_view')
+            elif user.groups.filter(name='Employees').exists():
+                return redirect('/documents/')  # Redirect to document list or creation form
+            else:
+                return HttpResponseForbidden("You do not have permission to access this page.")
     else:
         form = AuthenticationForm()
     return render(request, 'accounts/login.html', {'form': form})
