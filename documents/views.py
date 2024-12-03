@@ -1,12 +1,15 @@
 from rest_framework import viewsets
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.exceptions import ValidationError
+from django.shortcuts import get_object_or_404, redirect
+from django.http import HttpResponseForbidden
+from django.contrib.auth.decorators import permission_required
+from transformers import pipeline
+import PyPDF2
 from .models import Document, Workflow
 from .serializers import DocumentSerializer, WorkflowSerializer
-from rest_framework.permissions import IsAuthenticated
-from transformers import pipeline
-from rest_framework.decorators import action
-from rest_framework.response import Response
-import PyPDF2
-from rest_framework.exceptions import ValidationError
 
 # Initialize the HuggingFace pipelines
 classifier = pipeline('zero-shot-classification', model='facebook/bart-large-mnli')
@@ -16,7 +19,6 @@ class DocumentViewSet(viewsets.ModelViewSet):
     queryset = Document.objects.all()
     serializer_class = DocumentSerializer
     permission_classes = [IsAuthenticated]
-    
 
     def perform_create(self, serializer):
         # Check if the file is uploaded
@@ -30,6 +32,7 @@ class DocumentViewSet(viewsets.ModelViewSet):
         for page in pdf_reader.pages:
             document_content += page.extract_text() or ""
         print("Extracted Content:", document_content)
+
         # Summarize the content using HuggingFace pipeline
         summarized_content = summarizer(document_content, max_length=10000, min_length=5, do_sample=False)
         summary_text = summarized_content[0]['summary_text']
@@ -43,7 +46,6 @@ class DocumentViewSet(viewsets.ModelViewSet):
             uploaded_by=self.request.user,
             content=summary_text,
             type=document_type,
-            
         )
 
     def get_queryset(self):
@@ -53,13 +55,36 @@ class DocumentViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(uploaded_by=user)
         return queryset
 
+    @permission_required('documents.change_document', raise_exception=True)
+    def update_status(self, request, pk):
+        document = get_object_or_404(Document, pk=pk)
 
+        # Only managers and admins can update status
+        if request.user.groups.filter(name__in=['Managers', 'Administrators']).exists():
+            if request.method == 'POST':
+                new_status = request.POST.get('status')
+                if new_status in dict(Document.STATUS_CHOICES):
+                    document.status = new_status
+                    document.save()
+                    return redirect('document_list')  # Correctly inside the method
+                else:
+                    return HttpResponseForbidden("Invalid status selected.")
+        return HttpResponseForbidden("You don't have permission to update status.")
+
+def delete_document(request, pk):
+    document = get_object_or_404(Document, pk=pk)
+
+    # Allow employees to delete their own documents
+    if request.user == document.uploaded_by and request.user.has_perm('documents.delete_document'):
+        document.delete()
+        return redirect('document_list')  # Correctly inside the method
+
+    return HttpResponseForbidden("You don't have permission to delete this document.")
 
 class WorkflowViewSet(viewsets.ModelViewSet):
     queryset = Workflow.objects.all()
     serializer_class = WorkflowSerializer
     permission_classes = [IsAuthenticated]
-   
 
     @action(detail=True, methods=['post'], url_path='assign-workflow')
     def assign_to_workflow(self, request, pk=None):
