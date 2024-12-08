@@ -38,7 +38,7 @@ class Command(BaseCommand):
         employee_permissions = Permission.objects.filter(
             content_type=document_ct,
             codename__in=['add_document', 'view_document', 'change_document', 'delete_document']
-        )
+        )| Permission.objects.filter(content_type=workflow_ct, codename='change_workflow')
 
         # Set permissions for each group
         admin_group.permissions.set(admin_permissions)

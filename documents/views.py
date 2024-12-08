@@ -4,23 +4,37 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 from django.shortcuts import get_object_or_404, redirect
-from django.http import HttpResponseForbidden
+from django.http import HttpResponse, HttpResponseForbidden
 from django.contrib.auth.decorators import permission_required
 from transformers import pipeline
 import PyPDF2
 from .models import Document, Workflow
 from .serializers import DocumentSerializer, WorkflowSerializer
+from django.core.exceptions import PermissionDenied
 
 # Initialize the HuggingFace pipelines
 classifier = pipeline('zero-shot-classification', model='facebook/bart-large-mnli')
 summarizer = pipeline('summarization', model='sshleifer/distilbart-cnn-12-6')
 
+
+def test_permission_view(request):
+    user = request.user
+
+    if user.has_perm('documents.change_workflow'):
+        return HttpResponse("You have permission to change workflows.")
+    raise PermissionDenied("You do not have permission to change workflows.")
+
+
+
+
 class DocumentViewSet(viewsets.ModelViewSet):
     queryset = Document.objects.all()
     serializer_class = DocumentSerializer
     permission_classes = [IsAuthenticated]
-
+  
     def perform_create(self, serializer):
+       
+       
         # Check if the file is uploaded
         file = self.request.FILES.get('file')
         if not file:
@@ -34,7 +48,7 @@ class DocumentViewSet(viewsets.ModelViewSet):
         print("Extracted Content:", document_content)
 
         # Summarize the content using HuggingFace pipeline
-        summarized_content = summarizer(document_content, max_length=10000, min_length=5, do_sample=False)
+        summarized_content = summarizer(document_content, max_length=10, min_length=5, do_sample=False)
         summary_text = summarized_content[0]['summary_text']
 
         # Classify the summarized content

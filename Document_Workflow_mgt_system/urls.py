@@ -26,4 +26,5 @@ urlpatterns = [
 
     path('admin-page/',accounts_views.admin_view, name='admin_view')
 
+
 ]
